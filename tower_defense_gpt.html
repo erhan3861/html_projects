@@ -1,0 +1,908 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1" />
+<title>Listeler TD — Tek Dosyalık Tower Defense</title>
+<style>
+  :root{
+    --bg:#0b1220;
+    --panel:#0f172a;
+    --text:#e5e7eb;
+    --muted:#94a3b8;
+    --accent:#6c5dd3; /* Tema rengi */
+    --good:#22c55e;
+    --warn:#f59e0b;
+    --bad:#ef4444;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%;margin:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,'Helvetica Neue',Arial}
+  .wrap{position:relative; width:100vw; height:100vh; display:grid; place-items:center;}
+  .stage{
+    position:relative;
+    width:min(100vw, 177.78vh);
+    aspect-ratio:16/9;
+    background:linear-gradient(180deg,#0a0f1c 0%, #0d1424 100%);
+    border:1px solid #111827; border-radius:14px; box-shadow:0 10px 40px #0007; overflow:hidden;
+  }
+  canvas{width:100%; height:100%; display:block;}
+
+  .hud{
+    position:absolute; inset:10px 10px auto 10px; display:flex; gap:10px; align-items:center; z-index:5;
+    background:linear-gradient(180deg,#0f172a88,#0f172a44);
+    backdrop-filter: blur(6px); border:1px solid #1f2937; border-radius:12px; padding:8px 10px;
+  }
+  .chip{padding:6px 10px; border-radius:999px; background:#111827; border:1px solid #1f2937; font-weight:600; font-size:14px}
+  .chip.heart::before{content:"❤️ "}
+  .chip.coin::before{content:"🪙 "}
+  .chip.wave::before{content:"🌊 "}
+  .chip.score::before{content:"⭐ "}
+  .btn{cursor:pointer; user-select:none; border-radius:999px; padding:6px 10px; font-weight:700;
+    border:1px solid #2b3445; background:linear-gradient(180deg,#1a2140,#151a33);
+    box-shadow:inset 0 0 0 1px #000, 0 2px 8px #0006; transition:transform .08s ease;}
+  .btn:hover{transform:translateY(-1px)}
+  .btn:active{transform:translateY(0)}
+  .btn.accent{background:linear-gradient(180deg, color-mix(in oklch, var(--accent) 70%, #0d0f1a), #1a1444);}
+  .emoji{font-size:18px; line-height:1}
+  .spacer{flex:1}
+
+  .leftPanel,.rightPanel{
+    position:absolute; top:60px; width:260px; z-index:5;
+    background:linear-gradient(180deg,#0f172a9a,#0f172a66); border:1px solid #1f2937; border-radius:12px; padding:10px;
+  }
+  .leftPanel{left:10px}
+  .rightPanel{right:10px}
+  .leftPanel h3,.rightPanel h3{margin:0 0 6px 0; font-size:14px; color:#cbd5e1}
+  .tip{font-size:12px; color:var(--muted); line-height:1.4}
+  .badgeRow{display:flex; gap:6px; flex-wrap:wrap}
+  .badge{display:inline-flex; align-items:center; gap:6px; padding:6px 8px; border-radius:10px; font-size:12px; font-weight:700; border:1px solid #263146; background:#111827; cursor:pointer;}
+  .badge[data-type="active"]{outline:2px solid var(--accent)}
+
+  .shop{
+    position:absolute; left:10px; right:10px; bottom:10px; z-index:5; display:flex; gap:10px; align-items:center; justify-content:center;
+    padding:10px; border-radius:12px; border:1px dashed #334155; background:linear-gradient(180deg,#0b1220bb,#0b122088);
+    opacity:0; pointer-events:none; transition:opacity .2s ease;
+  }
+  .shop.show{opacity:1; pointer-events:auto}
+  .shop .u{display:flex; gap:10px}
+  .shop .item{display:flex; flex-direction:column; gap:6px; align-items:center; background:#0f172a; border:1px solid #1f2937; border-radius:10px; padding:10px 12px; min-width:160px}
+  .shop .item .price{font-size:12px; color:#9ca3af}
+  .shop .item .title{font-weight:800; font-size:13px}
+  .shop .item .btn{width:100%; text-align:center}
+
+  .modal{position:absolute; inset:0; display:grid; place-items:center; background:linear-gradient(180deg,#0008,#000c); z-index:10;}
+  .card{width:min(720px, 94%); background:#0f172a; border:1px solid #1f2937; border-radius:16px; padding:18px; box-shadow:0 20px 70px #0009;}
+  .card h1{margin:0 0 8px 0; font-size:24px}
+  .card p{color:#cbd5e1; font-size:14px; line-height:1.6}
+  .row{display:flex; gap:10px; flex-wrap:wrap; margin-top:12px}
+  .row .btn{flex:1 1 180px}
+
+  .toast{
+    position:absolute; left:50%; transform:translateX(-50%); bottom:80px;
+    background:#111827; border:1px solid #1f2937; padding:8px 12px; border-radius:10px; z-index:9;
+    opacity:0; transition:opacity .2s ease, transform .2s ease; pointer-events:none; font-size:13px
+  }
+  .toast.show{opacity:1; transform:translateX(-50%) translateY(-6px)}
+  .fps{position:absolute; right:12px; bottom:12px; font-size:12px; color:#9ca3af; z-index:6; opacity:.9; background:#0b1220cc; border:1px solid #1f2937; padding:4px 6px; border-radius:8px;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="stage" id="stage">
+    <canvas id="game" width="1280" height="720" aria-label="Tower Defense oyunu"></canvas>
+
+    <div class="hud" id="hud">
+      <div class="chip heart" id="lives">❤️ 20</div>
+      <div class="chip coin" id="coins">🪙 0</div>
+      <div class="chip score" id="score">⭐ 0</div>
+      <div class="chip wave" id="wave">🌊 1</div>
+      <div class="spacer"></div>
+      <div class="chip" id="targetChip">🎯 Hedef: —</div>
+      <button class="btn" id="pauseBtn"><span class="emoji">⏸️</span> Duraklat</button>
+      <button class="btn" id="soundBtn"><span class="emoji">🔊</span> Ses</button>
+    </div>
+
+    <div class="leftPanel">
+      <h3>🎯 Hedef Konu: Python Listeler</h3>
+      <div class="tip" id="tip">İpucu: <b>append</b> listenin sonuna ekler.</div>
+    </div>
+
+    <div class="rightPanel">
+      <h3>🧪 Bonus / Joker</h3>
+      <div class="badgeRow" id="bonusRow"></div>
+    </div>
+
+    <div class="shop" id="shop">
+      <div class="u">
+        <div class="item">
+          <div class="title">Menzil +</div>
+          <div class="price" id="priceRange">Fiyat: 8🪙</div>
+          <button class="btn accent" id="buyRange">Satın Al</button>
+        </div>
+        <div class="item">
+          <div class="title">Hasar +</div>
+          <div class="price" id="priceDamage">Fiyat: 10🪙</div>
+          <button class="btn accent" id="buyDamage">Satın Al</button>
+        </div>
+        <div class="item">
+          <div class="title">Atış Hızı +</div>
+          <div class="price" id="priceAS">Fiyat: 12🪙</div>
+          <button class="btn accent" id="buyAS">Satın Al</button>
+        </div>
+        <div class="item">
+          <div class="title">Joker: Freeze</div>
+          <div class="price" id="priceFreeze">Fiyat: 6🪙</div>
+          <button class="btn" id="buyFreeze">Satın Al</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal" id="menu">
+      <div class="card">
+        <h1>🛡️ Listeler TD</h1>
+        <p><b>Tek dosyalık</b> Tower Defense. Düşmanlar <b>kelime</b> taşır. Bir kelimeye <b>tıkla</b> — menzildeki tüm kuleler o hedefe ateş etsin. Python <b>listeler</b> temalı kelimeler daha fazla ödül sağlar.</p>
+        <p><b>Kontroller:</b> Kelimeye tıkla → hedef seç. 10 puanda kuleleri sürükleyerek taşıyabilirsin. Dalga aralarında <b>Shop</b>tan yükseltme al. Sağ üstten bonusları etkinleştir. 🔊 Ses için üst bardaki butonu kullan.</p>
+        <div class="row">
+          <button class="btn accent" id="startBtn">▶️ Başlat</button>
+          <button class="btn" id="howBtn">❔ Nasıl Oynanır?</button>
+          <button class="btn" id="resetBest">🏆 En İyi Skoru Sıfırla</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal" id="how" style="display:none">
+      <div class="card">
+        <h1>❔ Nasıl Oynanır?</h1>
+        <p>• Kelimeye tıkla, menzildeki kuleler ateş etsin. <br>
+           • <span style="color:var(--good)">Liste temalı</span>: +2 puan/+2 coin. Diğerleri: +1/+1 (ceza modu kapalı).<br>
+           • <b>Combo</b>: 3 doğru vuruş → +3 bonus. <br>
+           • <b>Bonuslar</b>: 10 puan → Kule taşıma; 20 → Hızlı atış; 30 → Menzil +%25 (10 sn). <br>
+           • Kaybetme: Düşmanlar çıkışa ulaşırsa can azalır.</p>
+        <div class="row">
+          <button class="btn" id="backBtn">🔙 Geri</button>
+          <button class="btn accent" id="start2Btn">▶️ Başlat</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="toast" id="toast">Menzilde kule yok.</div>
+    <div class="fps" id="fps" title="DEBUG fps+bilgi">fps</div>
+  </div>
+</div>
+
+<script>
+/* ============================================================
+   Listeler TD — Tek Dosyalık Tower Defense (Canvas 2D)
+   ES6 + mekanikler korunarak görsel/vertical y patch
+   ============================================================ */
+
+/* ---------- GLOBAL / DURUM ---------- */
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+const stage = document.getElementById('stage');
+
+const hud = {
+  lives: document.getElementById('lives'),
+  coins: document.getElementById('coins'),
+  score: document.getElementById('score'),
+  wave: document.getElementById('wave'),
+  target: document.getElementById('targetChip'),
+  pauseBtn: document.getElementById('pauseBtn'),
+  soundBtn: document.getElementById('soundBtn'),
+};
+const panels = {
+  leftTip: document.getElementById('tip'),
+  bonusRow: document.getElementById('bonusRow'),
+  shop: document.getElementById('shop'),
+  priceRange: document.getElementById('priceRange'),
+  priceDamage: document.getElementById('priceDamage'),
+  priceAS: document.getElementById('priceAS'),
+  priceFreeze: document.getElementById('priceFreeze'),
+  btnRange: document.getElementById('buyRange'),
+  btnDamage: document.getElementById('buyDamage'),
+  btnAS: document.getElementById('buyAS'),
+  btnFreeze: document.getElementById('buyFreeze'),
+};
+const menu = {
+  root: document.getElementById('menu'),
+  how: document.getElementById('how'),
+  startBtn: document.getElementById('startBtn'),
+  start2Btn: document.getElementById('start2Btn'),
+  howBtn: document.getElementById('howBtn'),
+  backBtn: document.getElementById('backBtn'),
+  resetBest: document.getElementById('resetBest'),
+};
+const toastEl = document.getElementById('toast');
+const fpsEl = document.getElementById('fps');
+
+let GAME = {
+  state: 'menu',
+  time: 0,
+  last: performance.now(),
+  dt: 0,
+  fps: 0,
+  paused: false,
+  activeTarget: null,
+  draggingTower: null,
+  scale: 1,
+  offset: {x:0,y:0},
+};
+
+// Güvenli başlangıç — mekanikleri bozmadan boş listeler
+let G = {
+  lives: 20,
+  coins: 0,
+  score: 0,
+  best: Number(localStorage.getItem('LIST_TD_BEST')||0),
+  wave: 1,
+  enemies: [],
+  towers: [],
+  projs: [],
+  parts: [],
+  popups: [], // NEON-GLASS PATCH: uçan etiketler
+  spawnTimer: 0,
+  spawned: 0,
+  waveEnemies: 0,
+  waveTime: 0,
+  activeBonuses: [],
+  bonusStock: [],
+  canMoveTowers: false,
+  comboStreak: 0,
+  upgrading: {range:0, dmg:0, as:0},
+  shopPrices: null,
+};
+
+/* ---------- KONULAR / ETİKETLER ---------- */
+const TOPIC = {
+  listMain: [
+    "list","append","extend","insert","remove","pop","clear","index","count","sort","reverse",
+    "len","slicing","list comprehension","mutable","nested list","in","==","copy","shallow copy","deep copy",
+    "enumerate","zip","min","max","sum"
+  ],
+  others: [
+    "dict","set","tuple","def","lambda","for","while","try","except","class","self","__init__",
+    "pip","venv","algorithm","variable","function","array","stack","queue","binary","oop","recursion"
+  ],
+  tips: {
+    "append":"Listenin sonuna eleman ekler.",
+    "extend":"Bir başka listenin elemanlarını ekler.",
+    "insert":"Belirli konuma ekler.",
+    "remove":"İlk eşleşen elemanı siler.",
+    "pop":"Belirli indeksi çıkarır ve döndürür.",
+    "clear":"Listeyi boşaltır.",
+    "index":"Elemanın ilk indeksini verir.",
+    "count":"Eleman sayısını verir.",
+    "sort":"Listeyi sıralar (yerinde).",
+    "reverse":"Sıralamayı tersine çevirir.",
+    "len":"Uzunluk (eleman sayısı).",
+    "slicing":"Alt liste dilimleme.",
+    "list comprehension":"Kısa yoldan liste üretimi.",
+    "mutable":"Liste değiştirilebilir tiptir.",
+    "nested list":"İç içe listeler.",
+    "in":"Üyelik kontrolü.",
+    "==":"Eşitlik karşılaştırması.",
+    "copy":"Yüzeysel kopya oluşturur.",
+    "shallow copy":"Üst seviye kopyalar.",
+    "deep copy":"Tüm alt öğeleriyle kopyalar.",
+    "enumerate":"(index, değer) çifti verir.",
+    "zip":"Listeleri eşleştirir.",
+    "min":"En küçük değer.",
+    "max":"En büyük değer.",
+    "sum":"Toplam."
+  }
+};
+
+/* ---------- CONFIG ---------- */
+const CONFIG = {
+  THEME_ACCENT: getCSS('--accent') || '#6c5dd3',
+  START_LIVES: 20,
+  START_COINS: 10,
+  START_TOWERS: [
+    {x: 320, y: 380, type:'basic'},
+    {x: 720, y: 260, type:'sniper'},
+  ],
+  TOPIC_RATIO: 0.6,
+  PENALTY_MODE: false,
+  BONUS_THRESHOLDS: [10, 20, 30],
+  TOWER_LIMIT: Infinity,
+  PATH: { y: 420, padLeft: 40, padRight: 40 },
+  WAVE: { baseEnemies: 16, duration: 30, growthEnemies: 1.10, growthSpeed: 1.05, spawnInterval: 1.2, maxConcurrent: 30 },
+  ENEMY: {
+    baseSpeed: 60,
+    hpCorrect: 60,
+    hpOther: 40,
+    size: { w: 140, h: 40 } // NEON-GLASS PATCH: okunabilirliği arttır
+  },
+  SCORING: { correct:{score:2,coins:2}, other:{score:1,coins:1}, penalty:-1, comboThreshold:3, comboBonus:3 },
+  TOWERS: {
+    basic:  {range:180, dmg:10, cd:0.8,  projSpeed:360},
+    sniper: {range:280, dmg:25, cd:1.8,  projSpeed:500}
+  },
+  SHOP: { range:{price:8, step:4, mult:1.12}, damage:{price:10, step:5, mult:1.12}, as:{price:12, step:6, mult:1.12}, freeze:{price:6} },
+  BONUS: {
+    moveTowers:{threshold:10},
+    haste:{threshold:20, amount:0.20, dur:10},
+    rangeRing:{threshold:30, amount:0.25, dur:10},
+    dropChance:0.10,
+    freeze:{dur:3, slow:0.35},
+    focus:{dur:5, dmg:0.5}
+  },
+  DEBUG: false,
+  SHOW_TIP: true
+};
+
+// NEON-GLASS PATCH: Dikey varyasyon parametreleri
+CONFIG.VERTICAL = {
+  lanes: [360, 400, 440, 480],
+  ampByWave: [18, 24, 30, 36, 42, 48],
+  noise: 10,
+  freq: 0.9
+};
+
+/* ---------- KÜÇÜK ARAÇLAR ---------- */
+function getCSS(name){ return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
+function clamp(v,a,b){ return Math.max(a, Math.min(b,v)); }
+function dist(x1,y1,x2,y2){ const dx=x2-x1, dy=y2-y1; return Math.hypot(dx,dy); }
+function rnd(a,b){ return Math.random()*(b-a)+a; }
+function choice(arr){ return arr[(Math.random()*arr.length)|0]; }
+
+/* ---------- SES (WebAudio) ---------- */
+const AudioSys = (()=>{
+  let ctx=null, master, ambOsc, ambGain;
+  let enabled = true;
+  function ensure(){
+    if(!ctx){
+      ctx = new (window.AudioContext||window.webkitAudioContext)();
+      master = ctx.createGain(); master.gain.value = 0.7; master.connect(ctx.destination);
+      ambOsc = ctx.createOscillator(); ambGain = ctx.createGain();
+      ambOsc.type='sine'; ambOsc.frequency.value = 70; ambGain.gain.value = 0.03;
+      ambOsc.connect(ambGain); ambGain.connect(master); ambOsc.start();
+    }
+  }
+  function resume(){ if(ctx && ctx.state==='suspended') ctx.resume(); }
+  function setEnabled(v){ enabled=v; if(!ctx) return; master.gain.value = v?0.7:0.0; }
+  function ping(freq=440, dur=0.08, vol=0.4, type='square'){
+    if(!enabled) return; ensure(); resume();
+    const o=ctx.createOscillator(), g=ctx.createGain();
+    o.type=type; o.frequency.value=freq; g.gain.value=vol; o.connect(g); g.connect(master);
+    const t=ctx.currentTime; o.start(t); g.gain.exponentialRampToValueAtTime(0.0001, t+dur); o.stop(t+dur+0.02);
+  }
+  return {
+    ensure,setEnabled,
+    bling:()=>ping(880,0.15,0.6,'triangle'),
+    shot: ()=>ping(520,0.06,0.35,'sawtooth'),
+    hit:  ()=>ping(320,0.09,0.5,'square')
+  };
+})();
+
+/* ---------- OYUN NESNELERİ ---------- */
+function makeTower(x,y,type='basic'){
+  const base = CONFIG.TOWERS[type];
+  return { id: crypto.randomUUID(), x,y,type, range: base.range, dmg: base.dmg, cd: base.cd, projSpeed: base.projSpeed, cdTimer:0, moving:false };
+}
+
+// NEON-GLASS PATCH: baseY/seed ekle
+function makeEnemy(word,isCorrect,waveNum){
+  const sz = CONFIG.ENEMY.size;
+  const speed = CONFIG.ENEMY.baseSpeed * Math.pow(CONFIG.WAVE.growthSpeed, waveNum-1);
+  const lanes = CONFIG.VERTICAL?.lanes || [CONFIG.PATH.y];
+  const baseY = choice(lanes);
+  return {
+    id: crypto.randomUUID(),
+    text: word, correct: isCorrect,
+    x: CONFIG.PATH.padLeft - sz.w,
+    baseY, y: baseY,
+    seed: Math.random()*1000,
+    w: sz.w, h: sz.h,
+    speed, t:0,
+    hp: (isCorrect?CONFIG.ENEMY.hpCorrect:CONFIG.ENEMY.hpOther),
+    maxHp: (isCorrect?CONFIG.ENEMY.hpCorrect:CONFIG.ENEMY.hpOther),
+    alive:true
+  };
+}
+
+function makeProjectile(from, target, speed, dmg){
+  return { id: crypto.randomUUID(), x: from.x, y: from.y, speed, dmg, target, alive:true };
+}
+function makeParticle(x,y, col, power=1){ return { x,y, vx: rnd(-60,60)*power, vy: rnd(-120,-30)*power, life: rnd(0.35,0.6), t:0, col }; }
+
+// NEON-GLASS PATCH: Popup (uçan yazı/emoji)
+function makePopup(x,y, txt, col='#e5e7eb', life=0.8, vy=-60){ return {x,y,txt,col,life,vy,t:0,alpha:1}; }
+
+/* ---------- OYUN AKIŞI ---------- */
+function resetGame(){
+  const startTowers = structuredClone(CONFIG.START_TOWERS).map(t=>makeTower(t.x,t.y,t.type));
+  G = {
+    lives: CONFIG.START_LIVES,
+    coins: CONFIG.START_COINS,
+    score: 0,
+    best: Number(localStorage.getItem('LIST_TD_BEST')||0),
+    wave: 1,
+    enemies: [],
+    towers: startTowers,
+    projs: [],
+    parts: [],
+    popups: [], // popup listesi
+    spawnTimer: 0,
+    spawned: 0,
+    waveEnemies: CONFIG.WAVE.baseEnemies,
+    waveTime: 0,
+    activeBonuses: [],
+    bonusStock: [],
+    canMoveTowers: false,
+    comboStreak: 0,
+    upgrading: {range:0, dmg:0, as:0},
+    shopPrices: structuredClone(CONFIG.SHOP),
+  };
+  GAME.activeTarget = null;
+  updateHUD();
+  renderBonusRow();
+  showTip("İpucu: <b>append</b> listenin sonuna ekler.");
+}
+
+function startWave(){
+  GAME.state = 'playing';
+  panels.shop.classList.remove('show');
+  G.spawnTimer = 0; G.spawned = 0; G.waveTime = 0;
+  G.waveEnemies = Math.floor(CONFIG.WAVE.baseEnemies * Math.pow(CONFIG.WAVE.growthEnemies, G.wave-1));
+}
+function endWave(){
+  GAME.state = 'shop';
+  panels.shop.classList.add('show');
+  const waveBonus = Math.floor(Math.max(0, (CONFIG.WAVE.duration - G.waveTime)) * 0.5);
+  if(waveBonus>0){ addCoins(waveBonus); showToast(`Wave bonusu +${waveBonus} 🪙`); }
+  updateShopPrices();
+}
+function nextWave(){ G.wave++; hud.wave.textContent = `🌊 ${G.wave}`; startWave(); }
+function gameOver(){
+  GAME.state = 'gameover';
+  panels.shop.classList.remove('show');
+  const best = Math.max(G.best, G.score);
+  if(best!==G.best){ localStorage.setItem('LIST_TD_BEST', best); G.best = best; }
+  showModal(`
+    <h1>💀 Oyun Bitti</h1>
+    <p>Puan: <b>${G.score}</b> — En iyi: <b>${G.best}</b></p>
+    <div class="row">
+      <button class="btn accent" id="againBtn">↻ Yeniden</button>
+      <button class="btn" id="menuBtn2">🏠 Menü</button>
+    </div>
+  `, m=>{
+    m.querySelector('#againBtn').onclick = ()=>{ hideModal(); resetGame(); startWave(); };
+    m.querySelector('#menuBtn2').onclick = ()=>{ hideModal(); showMainMenu(); };
+  });
+}
+
+/* ---------- HUD / UI ---------- */
+function updateHUD(){
+  hud.lives.textContent = `❤️ ${G.lives}`;
+  hud.coins.textContent = `🪙 ${G.coins}`;
+  hud.score.textContent = `⭐ ${G.score}`;
+  hud.wave.textContent = `🌊 ${G.wave}`;
+  hud.target.textContent = `🎯 Hedef: ${GAME.activeTarget? GAME.activeTarget.text : '—'}`;
+}
+function showToast(msg, ms=1200){ toastEl.textContent = msg; toastEl.classList.add('show'); setTimeout(()=>toastEl.classList.remove('show'), ms); }
+function showTip(html){ if(CONFIG.SHOW_TIP) panels.leftTip.innerHTML = html; }
+function updateShopPrices(){
+  const P = G.shopPrices;
+  panels.priceRange.textContent = `Fiyat: ${P.range.price}🪙`;
+  panels.priceDamage.textContent = `Fiyat: ${P.damage.price}🪙`;
+  panels.priceAS.textContent = `Fiyat: ${P.as.price}🪙`;
+  panels.priceFreeze.textContent = `Fiyat: ${CONFIG.SHOP.freeze.price}🪙`;
+}
+function renderBonusRow(){
+  const row = panels.bonusRow; row.innerHTML = '';
+  G.activeBonuses.forEach(b=>{
+    const div = document.createElement('div');
+    div.className='badge'; div.dataset.type='active';
+    div.innerHTML = `${b.icon} ${b.name} <span class="timer">${b.left.toFixed(1)}s</span>`;
+    row.appendChild(div);
+  });
+  G.bonusStock.forEach((b,i)=>{
+    const div = document.createElement('div');
+    div.className='badge'; div.title = 'Etkinleştir';
+    div.innerHTML = `${b.icon} ${b.name}`;
+    div.onclick = ()=>{ activateBonus(b.name); G.bonusStock.splice(i,1); renderBonusRow(); };
+    row.appendChild(div);
+  });
+}
+
+/* ---------- BONUS ---------- */
+function maybeThresholdBonuses(){
+  const s = G.score;
+  if(s>=CONFIG.BONUS.moveTowers.threshold && !G.canMoveTowers){
+    G.canMoveTowers = true; showToast('🔓 Kule taşıma açıldı!'); AudioSys.bling();
+  }
+  if(s>=CONFIG.BONUS.haste.threshold && !G.activeBonuses.find(b=>b.name==='Hızlı Atış')){
+    addTimedBonus('Hızlı Atış','⚡',CONFIG.BONUS.haste.dur, ()=>{}, ()=>{});
+  }
+  if(s>=CONFIG.BONUS.rangeRing.threshold && !G.activeBonuses.find(b=>b.name==='Menzil +%25')){
+    addTimedBonus('Menzil +%25','⭕',CONFIG.BONUS.rangeRing.dur, ()=>{}, ()=>{});
+  }
+}
+function addTimedBonus(name, icon, dur, onStart, onEnd){
+  const b = {name, icon, left:dur, onStart, onEnd};
+  onStart(); G.activeBonuses.push(b); renderBonusRow();
+}
+function activateBonus(name){
+  if(name==='Freeze'){ addTimedBonus('Freeze','❄️', CONFIG.BONUS.freeze.dur, ()=>{}, ()=>{}); showToast('❄️ Freeze: düşmanlar yavaşladı'); }
+  else if(name==='Focus'){ addTimedBonus('Focus','🎯', CONFIG.BONUS.focus.dur, ()=>{}, ()=>{}); showToast('🎯 Focus: kule hasarı arttı'); }
+}
+function dropRandomJoker(){
+  if(Math.random() < CONFIG.BONUS.dropChance){
+    G.bonusStock.push( choice([{name:'Freeze',icon:'❄️'},{name:'Focus',icon:'🎯'}]) );
+    renderBonusRow(); AudioSys.bling();
+  }
+}
+
+/* ---------- PARA / PUAN ---------- */
+function addCoins(c){ G.coins += c; updateHUD(); }
+function addScore(s){ G.score += s; updateHUD(); maybeThresholdBonuses(); }
+
+/* ---------- SHOP ---------- */
+panels.btnRange.onclick = ()=>{
+  const p = G.shopPrices.range;
+  if(G.coins >= p.price){ G.coins -= p.price; G.upgrading.range++; p.price = Math.floor(p.price + p.step);
+    updateShopPrices(); updateHUD(); showToast('Menzil +'); } else showToast('Yetersiz 🪙');
+};
+panels.btnDamage.onclick = ()=>{
+  const p = G.shopPrices.damage;
+  if(G.coins >= p.price){ G.coins -= p.price; G.upgrading.dmg++; p.price = Math.floor(p.price + p.step);
+    updateShopPrices(); updateHUD(); showToast('Hasar +'); } else showToast('Yetersiz 🪙');
+};
+panels.btnAS.onclick = ()=>{
+  const p = G.shopPrices.as;
+  if(G.coins >= p.price){ G.coins -= p.price; G.upgrading.as++; p.price = Math.floor(p.price + p.step);
+    updateShopPrices(); updateHUD(); showToast('Atış Hızı +'); } else showToast('Yetersiz 🪙');
+};
+panels.btnFreeze.onclick = ()=>{
+  if(G.coins >= CONFIG.SHOP.freeze.price){
+    G.coins -= CONFIG.SHOP.freeze.price; G.bonusStock.push({name:'Freeze', icon:'❄️'});
+    updateHUD(); renderBonusRow(); showToast('Freeze elde!');
+  }else showToast('Yetersiz 🪙');
+};
+
+/* ---------- MENÜ ---------- */
+function showMainMenu(){ menu.root.style.display=''; menu.how.style.display='none'; GAME.state = 'menu'; }
+menu.startBtn.onclick = ()=>{ hideMenu(); resetGame(); startWave(); AudioSys.ensure(); };
+menu.start2Btn.onclick = ()=>{ hideHow(); resetGame(); startWave(); AudioSys.ensure(); };
+menu.howBtn.onclick = ()=>{ hideMenu(); showHow(); };
+menu.backBtn.onclick = ()=>{ hideHow(); showMainMenu(); };
+menu.resetBest.onclick = ()=>{ localStorage.removeItem('LIST_TD_BEST'); showToast('En iyi skor sıfırlandı'); };
+function hideMenu(){ menu.root.style.display='none'; }
+function showHow(){ menu.how.style.display=''; }
+function hideHow(){ menu.how.style.display='none'; }
+function showModal(innerHTML, after){
+  const m = document.createElement('div'); m.className='modal';
+  m.innerHTML = `<div class="card">${innerHTML}</div>`;
+  document.getElementById('stage').appendChild(m);
+  if(after) after(m);
+}
+function hideModal(){ const m = document.querySelector('.modal:not(#menu):not(#how)'); if(m) m.remove(); }
+
+/* ---------- PAUSE & SOUND ---------- */
+hud.pauseBtn.onclick = ()=>{
+  if(GAME.state==='playing'){ GAME.state='paused'; hud.pauseBtn.innerHTML='▶️ Devam'; }
+  else if(GAME.state==='paused'){ GAME.state='playing'; hud.pauseBtn.innerHTML='<span class="emoji">⏸️</span> Duraklat'; }
+};
+let soundOn = true;
+hud.soundBtn.onclick = ()=>{
+  soundOn = !soundOn;
+  hud.soundBtn.innerHTML = soundOn? '<span class="emoji">🔊</span> Ses' : '<span class="emoji">🔈</span> Sessiz';
+  AudioSys.setEnabled(soundOn);
+};
+
+/* ---------- GİRİŞ ---------- */
+stage.addEventListener('pointerdown', onPointerDown);
+stage.addEventListener('pointermove', onPointerMove);
+stage.addEventListener('pointerup',   onPointerUp);
+stage.addEventListener('pointercancel', onPointerUp);
+function getPointerPos(ev){
+  const rect = canvas.getBoundingClientRect();
+  const x = (ev.clientX - rect.left) * (canvas.width / rect.width);
+  const y = (ev.clientY - rect.top)  * (canvas.height / rect.height);
+  return {x,y};
+}
+function onPointerDown(ev){
+  const {x,y} = getPointerPos(ev);
+  if(GAME.state!=='playing') return;
+
+  if(G.canMoveTowers){
+    const t = findTowerAt(x,y);
+    if(t){ GAME.draggingTower = t; t.moving = true; return; }
+  }
+  const e = findEnemyAt(x,y);
+  if(e){ GAME.activeTarget = e; updateHUD(); }
+}
+function onPointerMove(ev){
+  if(!GAME.draggingTower) return;
+  const {x,y} = getPointerPos(ev);
+  const t = GAME.draggingTower;
+  const dy = Math.abs(y - CONFIG.PATH.y);
+  if(dy < 40) t.y = (y<CONFIG.PATH.y? CONFIG.PATH.y-40 : CONFIG.PATH.y+40);
+  else t.y = y;
+  t.x = clamp(x, 40, canvas.width-40);
+}
+function onPointerUp(){ if(GAME.draggingTower){ GAME.draggingTower.moving=false; GAME.draggingTower=null; } }
+function findEnemyAt(x,y){
+  for(let i=G.enemies.length-1;i>=0;i--){
+    const e = G.enemies[i]; if(!e.alive) continue;
+    if(x>=e.x && x<=e.x+e.w && y>=e.y-e.h/2 && y<=e.y+e.h/2) return e;
+  } return null;
+}
+function findTowerAt(x,y){ for(let i=G.towers.length-1;i>=0;i--){ const t = G.towers[i]; if(dist(x,y,t.x,t.y) <= 18) return t; } return null; }
+
+/* ---------- DÖNGÜ ---------- */
+function loop(ts){
+  GAME.dt = Math.min(0.033, (ts - GAME.last)/1000); GAME.last = ts; GAME.time += GAME.dt;
+  if((GAME._accFps ||= 0), (GAME._accCnt ||= 0), true){
+    GAME._accFps += 1/GAME.dt; GAME._accCnt++;
+    if(GAME.time % 0.5 < GAME.dt){ GAME.fps = (GAME._accFps/GAME._accCnt)|0; GAME._accFps=0; GAME._accCnt=0; }
+  }
+  if(GAME.state==='playing') update(GAME.dt);
+  draw();
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+
+/* ---------- UPDATE ---------- */
+function update(dt){
+  G.waveTime += dt;
+  if(G.waveTime >= CONFIG.WAVE.duration && G.enemies.length===0 && G.spawned>=G.waveEnemies){ endWave(); return; }
+
+  if(G.waveTime < CONFIG.WAVE.duration){
+    G.spawnTimer -= dt;
+    if(G.spawnTimer<=0 && G.spawned < G.waveEnemies && G.enemies.length < CONFIG.WAVE.maxConcurrent){
+      spawnEnemy(); G.spawnTimer = CONFIG.WAVE.spawnInterval;
+    }
+  }
+
+  for(let i=G.activeBonuses.length-1;i>=0;i--){
+    const b = G.activeBonuses[i]; b.left -= dt; if(b.left<=0){ b.onEnd(); G.activeBonuses.splice(i,1); renderBonusRow(); }
+  }
+
+  const speedMult = getFreezeSlowMult();
+  for(const e of G.enemies){
+    if(!e.alive) continue;
+    e.x += e.speed * speedMult * dt;
+    e.y = verticalY(e, GAME.time); // NEON-GLASS PATCH: dikey salınım
+    if(e.x > canvas.width - CONFIG.PATH.padRight){
+      e.alive=false; G.lives--; updateHUD(); if(G.lives<=0){ gameOver(); return; }
+    }
+  }
+
+  for(const t of G.towers){
+    t.cdTimer -= dt;
+    if(GAME.activeTarget && GAME.activeTarget.alive){
+      const rng = getTowerRange(t);
+      const d = dist(t.x,t.y, GAME.activeTarget.x+GAME.activeTarget.w/2, GAME.activeTarget.y);
+      if(d <= rng){
+        if(t.cdTimer<=0){
+          fire(t, GAME.activeTarget);
+          const cdMul = getHasteMult() * getAtkSpeedUpgradeMult();
+          t.cdTimer = Math.max(0.1, t.cd * cdMul);
+        }
+      }
+    }
+  }
+
+  for(const p of G.projs){
+    if(!p.alive) continue;
+    const tgt = p.target; if(!tgt || !tgt.alive){ p.alive=false; continue; }
+    const tx = tgt.x + tgt.w/2, ty = tgt.y;
+    const dx = tx - p.x, dy = ty - p.y;
+    const L = Math.hypot(dx,dy) || 1;
+    const step = p.speed * dt;
+    p.x += (dx/L)*step; p.y += (dy/L)*step;
+
+    if(L < 8){
+      p.alive=false;
+      let dmg = p.dmg; dmg += G.upgrading.dmg * 2; dmg += getFocusBonus();
+      tgt.hp -= dmg; AudioSys.hit();
+
+      // NEON-GLASS PATCH: vurunca +1 popup
+      G.popups.push( makePopup(tx, ty-8, '+1', '#a7f3d0', 0.6, -80) );
+
+      for(let i=0;i<8;i++) G.parts.push( makeParticle(tx,ty, tgt.correct?CONFIG.THEME_ACCENT:'#9ca3af', 0.8) );
+      if(tgt.hp<=0){
+        tgt.alive=false;
+        const pack = tgt.correct? CONFIG.SCORING.correct : CONFIG.SCORING.other;
+        addScore(pack.score); addCoins(pack.coins);
+
+        // NEON-GLASS PATCH: ölünce 🪙 popup
+        G.popups.push( makePopup(tx, ty-14, `🪙 +${pack.coins}`, '#fde68a', 0.9, -70) );
+
+        if(tgt.correct) {
+          G.comboStreak++;
+          if(G.comboStreak>=CONFIG.SCORING.comboThreshold){
+            addScore(CONFIG.SCORING.comboBonus); addCoins(CONFIG.SCORING.comboBonus);
+            showToast(`Combo! +${CONFIG.SCORING.comboBonus}`); G.comboStreak=0;
+          }
+          const tip = TOPIC.tips[tgt.text]; if(tip) showTip(`İpucu: <b>${tgt.text}</b> — ${tip}`);
+        }else{
+          if(CONFIG.PENALTY_MODE){ addScore(CONFIG.SCORING.penalty); }
+          G.comboStreak=0;
+        }
+        dropRandomJoker();
+        if(GAME.activeTarget && !GAME.activeTarget.alive) GAME.activeTarget=null, updateHUD();
+      }
+    }
+  }
+
+  for(const pr of G.parts){ pr.t += dt; pr.vy += 300*dt; pr.x += pr.vx*dt; pr.y += pr.vy*dt; }
+  G.parts = G.parts.filter(p=>p.t<p.life);
+
+  // NEON-GLASS PATCH: popup'ları güncelle
+  for(const f of G.popups){ f.t += dt; f.y += f.vy*dt; f.alpha = 1 - (f.t/f.life); }
+  G.popups = G.popups.filter(f=>f.t < f.life);
+
+  G.projs = G.projs.filter(p=>p.alive);
+  G.enemies = G.enemies.filter(e=>e.alive);
+
+  if(!GAME.activeTarget) hud.target.textContent='🎯 Hedef: —';
+}
+
+/* ---------- BONUS KATSAYILARI ---------- */
+function getHasteMult(){ let mul = 1; if(G.activeBonuses.find(b=>b.name==='Hızlı Atış')) mul *= (1- CONFIG.BONUS.haste.amount); return mul; }
+function getAtkSpeedUpgradeMult(){ return Math.pow(0.93, G.upgrading.as); }
+function getTowerRange(t){ let r = t.range + G.upgrading.range*12; if(G.activeBonuses.find(b=>b.name==='Menzil +%25')) r *= (1+CONFIG.BONUS.rangeRing.amount); return r; }
+function getFreezeSlowMult(){ return G.activeBonuses.find(b=>b.name==='Freeze') ? (1- CONFIG.BONUS.freeze.slow) : 1; }
+function getFocusBonus(){ return G.activeBonuses.find(b=>b.name==='Focus') ? (CONFIG.BONUS.focus.dmg * 10) : 0; }
+
+/* ---------- DİKEY SALINIM HESABI (NEON-GLASS PATCH) ---------- */
+function verticalY(e, t){
+  const v = CONFIG.VERTICAL || {lanes:[CONFIG.PATH.y], ampByWave:[0], noise:0, freq:1};
+  const idx = Math.min((G.wave||1)-1, v.ampByWave.length-1);
+  const amp = v.ampByWave[idx];
+  const s = Math.sin(t * v.freq + e.seed*0.37) * amp;
+  const n = ((Math.sin(t*0.7 + e.seed*1.23) + Math.sin(t*0.97 + e.seed*2.1)) * 0.5) * (v.noise||0);
+  return e.baseY + s + n;
+}
+
+/* ---------- SPAWN / FIRE ---------- */
+function spawnEnemy(){
+  const isCorrect = Math.random() < CONFIG.TOPIC_RATIO;
+  const word = isCorrect? choice(TOPIC.listMain) : choice(TOPIC.others);
+  const e = makeEnemy(word, isCorrect, G.wave);
+  G.enemies.push(e); G.spawned++;
+}
+function fire(tower, target){
+  const p = makeProjectile(tower, target, tower.projSpeed, tower.dmg);
+  G.projs.push(p); AudioSys.shot();
+}
+
+/* ---------- ÇİZİM ---------- */
+function draw(){
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  drawBackground(); drawPath();
+
+  for(const t of (G.towers||[])) drawTower(t);
+  for(const e of (G.enemies||[])) drawEnemy(e);
+  for(const p of (G.projs||[])) drawProjectile(p);
+  for(const pr of (G.parts||[])) drawParticle(pr);
+
+  // NEON-GLASS PATCH: uçan popup'lar
+  for(const f of (G.popups||[])){
+    ctx.save();
+    ctx.globalAlpha = Math.max(0, f.alpha);
+    ctx.fillStyle = f.col;
+    ctx.font = '700 18px system-ui, Segoe UI, Roboto';
+    ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.shadowColor = f.col; ctx.shadowBlur = 8;
+    ctx.fillText(f.txt, f.x, f.y);
+    ctx.restore();
+  }
+
+  if(window.DEBUG || CONFIG.DEBUG){
+    drawDebug(); fpsEl.style.display=''; fpsEl.textContent = `FPS ${GAME.fps}\nEnemies ${G.enemies.length}\nProjs ${G.projs.length}`;
+  }else fpsEl.style.display='none';
+}
+
+function drawBackground(){
+  const g=ctx.createLinearGradient(0,0,0,canvas.height);
+  g.addColorStop(0,'#0a0f1c'); g.addColorStop(1,'#0d1424');
+  ctx.fillStyle=g; ctx.fillRect(0,0,canvas.width, canvas.height);
+  ctx.fillStyle='#0e1a33';
+  for(let i=0;i<36;i++){ const x=(i*37)%canvas.width, y=((i*97)%canvas.height); ctx.fillRect((x+(i%5)*3)%canvas.width, (y+(i%7)*2)%canvas.height, 2,2); }
+}
+function drawPath(){
+  const y = CONFIG.PATH.y;
+  ctx.save();
+  ctx.strokeStyle='#1f2937'; ctx.lineWidth=22; ctx.lineCap='round';
+  ctx.beginPath(); ctx.moveTo(CONFIG.PATH.padLeft, y); ctx.lineTo(canvas.width - CONFIG.PATH.padRight, y); ctx.stroke();
+  ctx.strokeStyle='#0b1220'; ctx.lineWidth=2;
+  ctx.beginPath(); ctx.moveTo(CONFIG.PATH.padLeft, y-11); ctx.lineTo(canvas.width - CONFIG.PATH.padRight, y-11); ctx.stroke();
+  ctx.restore();
+}
+function drawTower(t){
+  const r = 16;
+  ctx.save();
+  ctx.fillStyle='#111827'; ctx.strokeStyle='#334155'; ctx.lineWidth=2;
+  ctx.beginPath(); ctx.arc(t.x, t.y, r, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+
+  const cd = clamp(t.cdTimer / Math.max(0.1, t.cd*getHasteMult()*getAtkSpeedUpgradeMult()), 0,1);
+  ctx.strokeStyle=CONFIG.THEME_ACCENT; ctx.lineWidth=3;
+  ctx.shadowColor = CONFIG.THEME_ACCENT; ctx.shadowBlur = 8; // NEON-GLASS PATCH: glow
+  ctx.beginPath(); ctx.arc(t.x, t.y, r+5, -Math.PI/2, -Math.PI/2 + (1-cd)*Math.PI*2); ctx.stroke();
+  ctx.shadowBlur = 0;
+
+  if(t.moving || window.DEBUG || CONFIG.DEBUG){
+    ctx.globalAlpha=0.15; ctx.fillStyle=CONFIG.THEME_ACCENT;
+    const R = getTowerRange(t); ctx.beginPath(); ctx.arc(t.x, t.y, R, 0, Math.PI*2); ctx.fill(); ctx.globalAlpha=1;
+  }
+  ctx.restore();
+}
+
+// NEON-GLASS PATCH: geliştirilmiş kapsül görünümü
+function drawEnemy(e){
+  const x=e.x, y=e.y, w=e.w, h=e.h, rx=12;
+  const grad = ctx.createLinearGradient(x, y-h/2, x, y+h/2);
+  if(e.correct){ grad.addColorStop(0, '#2342b6'); grad.addColorStop(1, '#1b2c7a'); }
+  else { grad.addColorStop(0, '#4b5563'); grad.addColorStop(1, '#374151'); }
+
+  ctx.save();
+  ctx.shadowColor = e.correct ? '#6c5dd3' : '#94a3b8';
+  ctx.shadowBlur = e.correct ? 14 : 8;
+
+  roundRect(ctx, x, y-h/2, w, h, rx);
+  ctx.fillStyle = grad; ctx.fill();
+  ctx.shadowBlur = 0; ctx.lineWidth = 2; ctx.strokeStyle = '#0b1220'; ctx.stroke();
+
+  const hpW = clamp(w * (e.hp/e.maxHp), 0, w);
+  ctx.fillStyle = e.correct ? '#22c55e' : '#f59e0b';
+  ctx.fillRect(x, y-h/2 -6, hpW, 4);
+
+  ctx.font = '800 18px system-ui, Segoe UI, Roboto';
+  ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.fillStyle = '#e7ecff';
+  ctx.strokeStyle = 'rgba(0,0,0,0.35)'; ctx.lineWidth = 3;
+  ctx.strokeText(e.text, x+w/2, y);
+  ctx.fillText(e.text, x+w/2, y);
+
+  if(GAME.activeTarget && GAME.activeTarget.id===e.id){
+    ctx.strokeStyle = CONFIG.THEME_ACCENT; ctx.lineWidth=2.5; ctx.strokeRect(x-3, y-h/2-3, w+6, h+6);
+  }
+  ctx.restore();
+}
+function drawProjectile(p){ ctx.save(); ctx.fillStyle=CONFIG.THEME_ACCENT; ctx.beginPath(); ctx.arc(p.x, p.y, 4, 0, Math.PI*2); ctx.fill(); ctx.restore(); }
+function drawParticle(pr){ ctx.save(); ctx.globalAlpha = 1 - (pr.t/pr.life); ctx.fillStyle = pr.col; ctx.fillRect(pr.x, pr.y, 3,3); ctx.restore(); }
+
+function drawDebug(){
+  if(GAME.activeTarget){
+    ctx.save(); ctx.strokeStyle='#a3e63588'; ctx.setLineDash([6,6]);
+    for(const t of G.towers){ ctx.beginPath(); ctx.moveTo(t.x,t.y); ctx.lineTo(GAME.activeTarget.x+GAME.activeTarget.w/2, GAME.activeTarget.y); ctx.stroke(); }
+    ctx.restore();
+  }
+}
+
+/* ---------- ŞEKİL ---------- */
+function roundRect(ctx,x,y,w,h,r){
+  const rr = Math.min(r, w/2, h/2);
+  ctx.beginPath();
+  ctx.moveTo(x+rr,y);
+  ctx.arcTo(x+w,y,x+w,y+h,rr);
+  ctx.arcTo(x+w,y+h,x,y+h,rr);
+  ctx.arcTo(x,y+h,x,y,rr);
+  ctx.arcTo(x,y,x+w,y,rr);
+  ctx.closePath();
+}
+
+/* ---------- RESPONSIVE ---------- */
+window.addEventListener('resize', ()=>{ /* CSS ölçekleme kullanılıyor */ });
+
+/* ---------- BAŞLAT ---------- */
+window.DEBUG = CONFIG.DEBUG;
+showMainMenu();
+
+/* ---------- Yardımcı Uyarı ---------- */
+setInterval(()=>{
+  if(GAME.state!=='playing' || !GAME.activeTarget) return;
+  const inRange = G.towers.some(t=> dist(t.x,t.y, GAME.activeTarget.x+GAME.activeTarget.w/2, GAME.activeTarget.y) <= getTowerRange(t));
+  if(!inRange && Math.random()<0.1) showToast('Hedef menzilde değil');
+}, 1200);
+
+/* ---------- Klavye: shop → next wave ---------- */
+window.addEventListener('keydown', (e)=>{ if(GAME.state==='shop' && (e.key===' '||e.key==='Enter')) nextWave(); });
+
+</script>
+</body>
+</html>

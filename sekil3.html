@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Kardan Adam – Temel Şekillerle Montaj</title>
+<style>
+  :root{
+    --bg:#eaf4ff; --panel:#f7f9fc; --ink:#263241; --muted:#7a8799;
+    --brand:#6c5dd3; --ok:#21b773; --err:#ff4d4f; --card:#fff;
+    --snow:#e6f1ff; --hat:#2c3e50; --scarf:#d64545; --nose:#f39c12; --coal:#1f2730;
+    --blue:#38a3eb;
+  }
+  *{box-sizing:border-box}
+  body{margin:0; height:100vh; display:flex; background:linear-gradient(180deg,var(--bg),#dfeeff); color:var(--ink); font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Arial}
+  /* Sol palet */
+  #sidebar{width:190px; background:var(--panel); border-right:1px solid #dde6f2; padding:14px; display:flex; flex-direction:column; gap:10px}
+  .brand{display:flex;align-items:center;gap:8px;font-weight:700}
+  .brand .dot{width:10px;height:10px;border-radius:50%;background:var(--brand)}
+  .sub{font-size:12px;color:var(--muted)}
+  .palette{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
+  .shape{width:76px;height:76px;border:1px solid #e6eef8;border-radius:14px;background:var(--card);display:grid;place-items:center;cursor:grab;box-shadow:0 4px 10px rgba(28,41,61,.06)}
+  .token{display:block}
+  .circle{width:52px;height:52px;border-radius:999px;background:var(--blue)}
+  .dot{width:18px;height:18px;border-radius:999px;background:#444}
+  .rect{width:58px;height:16px;border-radius:6px;background:#666}
+  .triangle{width:0;height:0;border-left:26px solid transparent;border-right:26px solid transparent;border-bottom:50px solid #2ecc71}
+  /* Orta sahne */
+  #stageWrap{flex:1; display:flex; flex-direction:column}
+  #toolbar{display:flex;gap:8px;padding:10px 14px;border-bottom:1px solid #dde6f2;background:var(--panel)}
+  .btn{border:1px solid #e6eef8;background:#fff;padding:8px 12px;border-radius:12px;font-size:13px;cursor:pointer;display:flex;align-items:center;gap:6px}
+  .btn:hover{transform:translateY(-1px)}
+  #game-area{flex:1;display:flex;align-items:center;justify-content:center;padding:14px}
+  #target{width:560px;height:560px;position:relative;border:1px solid #e6eef8;border-radius:20px;background:#fff;box-shadow:0 12px 28px rgba(28,41,61,.08);overflow:hidden}
+  #target::before{content:"";position:absolute;inset:0;background:
+    linear-gradient(#f3f7fd 1px,transparent 1px) 0 0/24px 24px,
+    linear-gradient(90deg,#f3f7fd 1px,transparent 1px) 0 0/24px 24px; pointer-events:none}
+  .part{position:absolute;opacity:.28;outline:2px dashed transparent;transition:opacity .18s, transform .18s, box-shadow .18s}
+  .part.valid{outline:2px dashed var(--brand); box-shadow:0 0 0 6px rgba(108,93,211,.08)}
+  .part.filled{opacity:1; outline:none; box-shadow:none}
+  .shake{animation:shake .3s}
+  @keyframes shake{10%{transform:translateX(-5px)}20%{transform:translateX(5px)}30%{transform:translateX(-4px)}40%{transform:translateX(4px)}50%{transform:translateX(-2px)}60%{transform:translateX(2px)}100%{transform:translateX(0)}}
+  .pulse{animation:pulse 1.4s infinite}
+  @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(108,93,211,.24)}70%{box-shadow:0 0 0 12px rgba(108,93,211,0)}100%{box-shadow:0 0 0 0 rgba(108,93,211,0)}}
+  .lock{position:absolute;pointer-events:none;animation:pop .22s ease}
+  @keyframes pop{0%{transform:scale(.6);opacity:.2}100%{transform:scale(1);opacity:1}}
+  /* Sağ görev paneli */
+  #task{width:270px;background:var(--panel);border-left:1px solid #dde6f2;padding:14px;display:flex;flex-direction:column;gap:10px}
+  .goal{background:#fff;border:1px solid #e6eef8;border-radius:16px;padding:10px;box-shadow:0 6px 16px rgba(28,41,61,.07);display:grid;place-items:center}
+  .ref{width:190px;opacity:.35}
+  .progress{height:10px;border-radius:999px;background:#edf2ff;overflow:hidden;border:1px solid #e6e8ff}
+  .bar{height:100%;width:0%;background:linear-gradient(90deg,var(--brand),#9b8eff)}
+  .msg{font-weight:700}
+  .ok{color:var(--ok)} .err{color:var(--err)}
+  /* Parça yerleri (görselden ilhamla) */
+  /* Sıra: 1 alt 2 orta 3 kafa 4 brim 5 hatTop 6 scarfBand 7 scarfTail 8 eyeL 9 eyeR 10 nose 11-14 mouth 15 btn1 16 btn2 17 btn3 18 armL 19 armR */
+  .p1{left:188px; top:330px; width:184px; height:184px; border-radius:999px; background:var(--snow)}
+  .p2{left:210px; top:242px; width:140px; height:140px; border-radius:999px; background:var(--snow)}
+  .p3{left:228px; top:176px; width:104px; height:104px; border-radius:999px; background:var(--snow)}
+  .p4{left:210px; top:150px; width:150px; height:22px; border-radius:8px; background:var(--hat)}
+  .p5{left:244px; top:100px; width:84px; height:52px; border-radius:8px; background:var(--hat)}
+  .p6{left:218px; top:220px; width:120px; height:24px; border-radius:10px; background:var(--scarf)}
+  .p7{left:300px; top:236px; width:26px; height:64px; border-radius:10px; background:var(--scarf)}
+  .p8{left:254px; top:206px; width:12px; height:12px; border-radius:999px; background:var(--coal)}
+  .p9{left:294px; top:206px; width:12px; height:12px; border-radius:999px; background:var(--coal)}
+  .p10{left:276px; top:216px; width:0; height:0; border-left:18px solid transparent; border-right:18px solid transparent; border-bottom:16px solid var(--nose)}
+  .p11{left:248px; top:234px; width:8px; height:8px; border-radius:999px; background:var(--coal)}
+  .p12{left:262px; top:240px; width:8px; height:8px; border-radius:999px; background:var(--coal)}
+  .p13{left:280px; top:240px; width:8px; height:8px; border-radius:999px; background:var(--coal)}
+  .p14{left:296px; top:234px; width:8px; height:8px; border-radius:999px; background:var(--coal)}
+  .p15{left:278px; top:295px; width:14px; height:14px; border-radius:999px; background:var(--coal)}
+  .p16{left:278px; top:325px; width:14px; height:14px; border-radius:999px; background:var(--coal)}
+  .p17{left:278px; top:355px; width:14px; height:14px; border-radius:999px; background:var(--coal)}
+  .p18{left:178px; top:270px; width:86px; height:10px; border-radius:6px; background:#8b5e3b; transform:rotate(-18deg)}
+  .p19{left:336px; top:270px; width:86px; height:10px; border-radius:6px; background:#8b5e3b; transform:rotate(18deg)}
+  /* Küçük ekran için kısmi ölçek */
+  @media (max-width:1100px){
+    #target{width:480px;height:480px}
+    .p1{left:158px; top:286px; width:168px; height:168px}
+    .p2{left:176px; top:212px; width:128px; height:128px}
+    .p3{left:190px; top:156px; width:96px; height:96px}
+    .p4{left:172px; top:134px; width:146px}
+    .p5{left:204px; top:90px}
+    .p6{left:182px; top:188px; width:116px}
+    .p7{left:260px; top:204px}
+    .p8{left:216px; top:176px}
+    .p9{left:252px; top:176px}
+    .p10{left:236px; top:186px}
+    .p11{left:210px; top:202px}
+    .p12{left:224px; top:206px}
+    .p13{left:242px; top:206px}
+    .p14{left:258px; top:202px}
+    .p15{left:240px; top:255px}
+    .p16{left:240px; top:281px}
+    .p17{left:240px; top:307px}
+    .p18{left:144px; top:230px}
+    .p19{left:296px; top:230px}
+  }
+</style>
+</head>
+<body>
+  <!-- Sol: Palet -->
+  <aside id="sidebar">
+    <div class="brand"><span class="dot"></span>Şekil Paleti</div>
+    <div class="sub">Doğru sırayla sürükleyip bırak</div>
+    <div class="palette" id="palette">
+      <div class="shape" draggable="true" data-shape="circle" title="Daire"><span class="token circle"></span></div>
+      <div class="shape" draggable="true" data-shape="rect"   title="Dikdörtgen"><span class="token rect"></span></div>
+      <div class="shape" draggable="true" data-shape="dot"    title="Nokta"><span class="token dot"></span></div>
+      <div class="shape" draggable="true" data-shape="triangle" title="Üçgen"><span class="token triangle"></span></div>
+      <!-- sonsuz palet: tekrarlar -->
+      <div class="shape" draggable="true" data-shape="circle"><span class="token circle"></span></div>
+      <div class="shape" draggable="true" data-shape="dot"><span class="token dot"></span></div>
+    </div>
+  </aside>
+
+  <!-- Orta: Oyun alanı -->
+  <main id="stageWrap">
+    <div id="toolbar">
+      <button class="btn" id="undoBtn">↩️ Geri Al</button>
+      <button class="btn" id="resetBtn">🗑️ Baştan Başla</button>
+      <button class="btn" id="hintBtn">💡 İpucu</button>
+      <div style="margin-left:auto;color:var(--muted);font-size:13px">Sıra: Alt → Orta → Kafa → Şapka → Atkı → Gözler → Burun → Ağız → Düğmeler → Kollar</div>
+    </div>
+    <section id="game-area" aria-label="Kardan Adam Çalışma Alanı">
+      <div id="target">
+        <!-- Şeffaf iskelet/drop bölgeleri -->
+        <div class="part p1"  data-order="1"  data-shape="circle" title="1 Alt gövde"></div>
+        <div class="part p2"  data-order="2"  data-shape="circle" title="2 Orta gövde"></div>
+        <div class="part p3"  data-order="3"  data-shape="circle" title="3 Kafa"></div>
+        <div class="part p4"  data-order="4"  data-shape="rect"   title="4 Şapka siperliği"></div>
+        <div class="part p5"  data-order="5"  data-shape="rect"   title="5 Şapka üstü"></div>
+        <div class="part p6"  data-order="6"  data-shape="rect"   title="6 Atkı bandı"></div>
+        <div class="part p7"  data-order="7"  data-shape="rect"   title="7 Atkı kuyruğu"></div>
+        <div class="part p8"  data-order="8"  data-shape="dot"    title="8 Sol göz"></div>
+        <div class="part p9"  data-order="9"  data-shape="dot"    title="9 Sağ göz"></div>
+        <div class="part p10" data-order="10" data-shape="triangle" title="10 Burun (havuç)"></div>
+        <div class="part p11" data-order="11" data-shape="dot"    title="11 Ağız nokta"></div>
+        <div class="part p12" data-order="12" data-shape="dot"    title="12 Ağız nokta"></div>
+        <div class="part p13" data-order="13" data-shape="dot"    title="13 Ağız nokta"></div>
+        <div class="part p14" data-order="14" data-shape="dot"    title="14 Ağız nokta"></div>
+        <div class="part p15" data-order="15" data-shape="dot"    title="15 Düğme 1"></div>
+        <div class="part p16" data-order="16" data-shape="dot"    title="16 Düğme 2"></div>
+        <div class="part p17" data-order="17" data-shape="dot"    title="17 Düğme 3"></div>
+        <div class="part p18" data-order="18" data-shape="rect"   title="18 Sol kol"></div>
+        <div class="part p19" data-order="19" data-shape="rect"   title="19 Sağ kol"></div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Sağ: Görev paneli (referans görselini dilersen değiştir) -->
+  <aside id="task">
+    <div class="brand"><span class="dot"></span>Görev</div>
+    <div class="goal">
+      <!-- İstersen buraya kendi kardan adam görsel URL’ini koy -->
+      <img class="ref" src="https://i.imgur.com/L3d3b24.png" alt="Kardan Adam referans (örnek)" />
+    </div>
+    <div class="progress"><div class="bar" id="bar"></div></div>
+    <div class="msg" id="msg"></div>
+  </aside>
+
+<script>
+  let currentStep = 1;
+  const parts = [...document.querySelectorAll('.part')].sort((a,b)=>+a.dataset.order - +b.dataset.order);
+  const total = parts.length;
+  const target = document.getElementById('target');
+  const bar = document.getElementById('bar');
+  const msg = document.getElementById('msg');
+  const undoStack = [];
+
+  // Sonsuz palet — sadece shape tipini taşır
+  document.querySelectorAll('.shape').forEach(el=>{
+    el.addEventListener('dragstart', e => {
+      e.dataTransfer.setData('shape', el.dataset.shape);
+    });
+  });
+
+  // Drop bölgeleri
+  parts.forEach(zone=>{
+    zone.addEventListener('dragover', e=>{
+      e.preventDefault();
+      const dragged = e.dataTransfer.getData('shape');
+      if (+zone.dataset.order === currentStep && dragged === zone.dataset.shape) zone.classList.add('valid');
+    });
+    zone.addEventListener('dragleave', ()=> zone.classList.remove('valid'));
+    zone.addEventListener('drop', e=>{
+      e.preventDefault();
+      zone.classList.remove('valid');
+      const dragged = e.dataTransfer.getData('shape');
+      const need = zone.dataset.shape;
+      const order = +zone.dataset.order;
+
+      if (order !== currentStep || dragged !== need){
+        zone.classList.add('shake'); setTimeout(()=>zone.classList.remove('shake'),320);
+        flash("Sıraya ve doğru şekle dikkat et ✋", "err");
+        return;
+      }
+      // Kilitle
+      lock(zone, need);
+      currentStep++;
+      progress();
+      if (currentStep > total){
+        flash("🎉 Harika! Kardan adam tamamlandı.", "ok");
+        confetti(target);
+      } else {
+        flash(`✅ Doğru. Sıradaki adım: ${currentStep}`, "ok");
+      }
+    });
+  });
+
+  function lock(zone, type){
+    zone.classList.add('filled');
+    const el = document.createElement('div');
+    el.className = 'lock';
+    // Pozisyon ve boyut
+    el.style.left = zone.style.left; el.style.top = zone.style.top;
+    el.style.width = zone.style.width || zone.offsetWidth+'px';
+    el.style.height= zone.style.height|| zone.offsetHeight+'px';
+
+    // Gerçek renk/stiller
+    if (type==='circle'){ el.style.borderRadius='999px'; el.style.background='#ffffff'; el.style.boxShadow='inset 0 -8px 18px rgba(0,0,0,.08)'; }
+    if (type==='rect'){
+      el.style.borderRadius='10px'; el.style.background = getRectColor(zone);
+      el.style.transform = zone.style.transform || 'none';
+    }
+    if (type==='dot'){ el.style.borderRadius='999px'; el.style.background=getDotColor(zone); }
+    if (type==='triangle'){
+      el.style.width='0'; el.style.height='0';
+      el.style.borderLeft='18px solid transparent';
+      el.style.borderRight='18px solid transparent';
+      el.style.borderBottom='16px solid var(--nose)';
+      el.style.filter='drop-shadow(0 1px 0 rgba(0,0,0,.15))';
+    }
+
+    target.appendChild(el);
+    undoStack.push({part: zone, lockEl: el});
+  }
+
+  // Parça türüne göre renk ayrımı (şapka/atkı/kol/düğme/ağız)
+  function getRectColor(zone){
+    const cls = zone.classList;
+    if (cls.contains('p4')||cls.contains('p5')) return getCSS('--hat');
+    if (cls.contains('p6')||cls.contains('p7')) return getCSS('--scarf');
+    if (cls.contains('p18')||cls.contains('p19')) return '#8b5e3b';
+    return '#666';
+  }
+  function getDotColor(zone){
+    const cls = zone.classList;
+    if (cls.contains('p8')||cls.contains('p9')||cls.contains('p11')||cls.contains('p12')||cls.contains('p13')||cls.contains('p14')||cls.contains('p15')||cls.contains('p16')||cls.contains('p17')) return getCSS('--coal');
+    return '#444';
+  }
+  function getCSS(v){ return getComputedStyle(document.documentElement).getPropertyValue(v).trim(); }
+
+  function progress(){
+    const done = Math.min(currentStep-1, total);
+    bar.style.width = (done/total*100)+'%';
+  }
+  function flash(t, kind='ok'){
+    msg.className = 'msg ' + (kind==='ok'?'ok':'err');
+    msg.textContent = t;
+  }
+
+  // Toolbar
+  document.getElementById('resetBtn').addEventListener('click', ()=>{
+    undoStack.splice(0).forEach(({lockEl,part})=>{ lockEl.remove(); part.classList.remove('filled','valid','pulse','shake'); });
+    currentStep = 1; progress(); flash('Sıfırlandı. Baştan deneyebilirsin.','');
+  });
+  document.getElementById('undoBtn').addEventListener('click', ()=>{
+    const last = undoStack.pop(); if(!last) return;
+    last.lockEl.remove(); last.part.classList.remove('filled');
+    currentStep = Math.max(1, currentStep-1); progress(); flash('Son adım geri alındı.','');
+  });
+  document.getElementById('hintBtn').addEventListener('click', ()=>{
+    const next = parts.find(p=>+p.dataset.order===currentStep);
+    if (!next) return; next.classList.add('pulse'); setTimeout(()=>next.classList.remove('pulse'),1600);
+  });
+
+  // Basit konfeti
+  function confetti(container){
+    for (let i=0;i<18;i++){
+      const c=document.createElement('div');
+      c.style.position='absolute'; c.style.width='8px'; c.style.height='14px';
+      c.style.left=(Math.random()*80+10)+'%'; c.style.top='0%';
+      c.style.borderRadius='3px';
+      c.style.background=['#6c5dd3','#38a3eb','#f1c40f','#2ecc71','#ff6b6b'][Math.floor(Math.random()*5)];
+      c.style.opacity='.95';
+      c.style.transition='transform 900ms cubic-bezier(.2,.8,.2,1), top 900ms ease-out, opacity 1100ms';
+      container.appendChild(c);
+      requestAnimationFrame(()=>{ c.style.top='90%'; c.style.transform='translateY(360px)'; c.style.opacity='0'; });
+      setTimeout(()=>c.remove(),1200);
+    }
+  }
+</script>
+</body>
+</html>

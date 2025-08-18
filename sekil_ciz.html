@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8" />
+  <title>Kardan Adam Algoritma Oyunu</title>
+  <style>
+    body {
+      display: flex;
+      margin: 0;
+      font-family: sans-serif;
+      background-color: #f0f8ff;
+    }
+    #toolbox {
+      width: 150px;
+      background-color: #e0f7fa;
+      padding: 10px;
+      border-right: 2px solid #ccc;
+    }
+    .shape {
+      width: 40px;
+      height: 40px;
+      margin: 10px auto;
+      cursor: move;
+      user-select: none;
+    }
+    .circle {
+      background-color: black;
+      border-radius: 50%;
+    }
+    .triangle {
+      width: 0;
+      height: 0;
+      border-left: 20px solid transparent;
+      border-right: 20px solid transparent;
+      border-bottom: 40px solid orange;
+    }
+    #scene {
+      flex: 1;
+      position: relative;
+    }
+    #canvas {
+      background-color: #fff;
+      display: block;
+    }
+    #log {
+      width: 250px;
+      background-color: #fff3e0;
+      border-left: 2px solid #ccc;
+      padding: 10px;
+      font-family: monospace;
+      font-size: 14px;
+    }
+  </style>
+</head>
+<body>
+  <!-- Toolbox (sol) -->
+  <div id="toolbox">
+    <div id="circle" class="shape circle" draggable="true" data-shape="circle"></div>
+    <div id="triangle" class="shape triangle" draggable="true" data-shape="triangle"></div>
+  </div>
+
+  <!-- Çizim sahnesi -->
+  <div id="scene">
+    <canvas id="canvas" width="600" height="400"></canvas>
+  </div>
+
+  <!-- Algoritma logları -->
+  <div id="log">
+    <strong>Algoritma:</strong><br />
+    <pre id="algorithm"></pre>
+  </div>
+
+  <script>
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    const algorithmDiv = document.getElementById('algorithm');
+
+    let logStep = 1;
+
+    function logAction(shape, x, y) {
+      const line = `${logStep++}. ${shape} → goto(${x}, ${y})\n`;
+      algorithmDiv.textContent += line;
+    }
+
+    function drawSnowman() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      // Gövde
+      ctx.fillStyle = "rgba(200, 200, 200, 0.3)";
+      ctx.beginPath();
+      ctx.arc(300, 320, 60, 0, Math.PI * 2); // alt
+      ctx.fill();
+
+      ctx.beginPath();
+      ctx.arc(300, 220, 50, 0, Math.PI * 2); // orta
+      ctx.fill();
+
+      ctx.beginPath();
+      ctx.arc(300, 130, 40, 0, Math.PI * 2); // kafa
+      ctx.fill();
+
+      // Göz yuvaları (abulon boş yerler)
+      ctx.fillStyle = "rgba(50,50,50,0.2)";
+      ctx.beginPath();
+      ctx.arc(285, 120, 7, 0, Math.PI * 2); // sol göz
+      ctx.arc(315, 120, 7, 0, Math.PI * 2); // sağ göz
+      ctx.fill();
+    }
+
+    // Şekil çizme fonksiyonları
+    function drawCircle(x, y) {
+      ctx.fillStyle = "black";
+      ctx.beginPath();
+      ctx.arc(x, y, 7, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    function drawTriangle(x, y) {
+      ctx.fillStyle = "orange";
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+      ctx.lineTo(x - 10, y + 20);
+      ctx.lineTo(x + 10, y + 20);
+      ctx.closePath();
+      ctx.fill();
+    }
+
+    drawSnowman(); // ekranı başta bir çizeriz
+
+    // 🎯 Drag & Drop İşlemleri
+    const shapes = document.querySelectorAll('.shape');
+    let draggedShape = null;
+
+    shapes.forEach(shape => {
+      shape.addEventListener('dragstart', (e) => {
+        draggedShape = e.target.dataset.shape;
+      });
+    });
+
+    canvas.addEventListener('dragover', (e) => {
+      e.preventDefault();
+    });
+
+    canvas.addEventListener('drop', (e) => {
+      const rect = canvas.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+
+      if (draggedShape === 'circle') {
+        drawCircle(x, y);
+        logAction('daire', Math.round(x), Math.round(y));
+      } else if (draggedShape === 'triangle') {
+        drawTriangle(x, y);
+        logAction('üçgen', Math.round(x), Math.round(y));
+      }
+
+      draggedShape = null;
+    });
+  </script>
+</body>
+</html> 

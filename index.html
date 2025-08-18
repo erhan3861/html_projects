@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Pygame + PyScript: Görsel Yükleme (files mapping)</title>
+
+  <!-- PyScript çekirdeği -->
+  <link rel="stylesheet" href="https://pyscript.net/releases/2025.7.2/core.css" />
+  <script type="module" src="https://pyscript.net/releases/2025.7.2/core.js"></script>
+
+  <style>
+    html,body{height:100%;margin:0;background:#0b1020;color:#e6eefc;font-family:system-ui,Arial,sans-serif}
+    main{height:100%;display:grid;place-items:center}
+    canvas{image-rendering:pixelated; outline:1px solid #1f2a44}
+    .hint{position:fixed;inset:auto 0 10px 0;text-align:center;opacity:.8;font-size:14px}
+  </style>
+</head>
+<body>
+  <main>
+    <!-- Pygame-CE varsayılan olarak id="canvas" tuvaline çiziyor -->
+    <canvas id="canvas" width="640" height="360"></canvas>
+  </main>
+
+  <!-- ÖNEMLİ: files ile PNG’yi tarayıcı FS’ine kopyala -->
+  <!-- soldaki kaynak (sunucudaki yol) -> sağdaki hedef (tarayıcı FS yolu) -->
+  <script type="py-game" src="main.py"
+    config='{
+      "files": {
+        "./robot_arm.png": "./robot_arm.png"
+      }
+    }'>
+  </script>
+
+  <!-- <div class="hint">PNG dosyanızı index.html ile aynı klasöre koyun • Ok tuşları gereksiz</div> -->
+</body>
+</html>
