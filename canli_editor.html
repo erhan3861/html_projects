@@ -1,0 +1,263 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Talent14 • Pygame Canlı Editör</title>
+
+  <!-- PyScript (pygame-ce için) -->
+  <link rel="stylesheet" href="https://pyscript.net/latest/core.css">
+  <script type="module" src="https://pyscript.net/latest/core.js"></script>
+
+  <!-- PyScript yapılandırması: pygame-ce'yi hazırla -->
+  <py-config>
+    packages = [
+      "pygame-ce"
+    ]
+  </py-config>
+
+  <style>
+    :root{
+      --t14:#6c5dd3; /* Talent14 ana renk */
+      --bg:#0e1320; --bg2:#121a2d; --ink:#e8ebff; --muted:#98a2b3; --line:#1f2a44;
+      --ok:#22c55e; --warn:#f59e0b; --err:#ef4444; --btn:#2b3560;
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{margin:0;background:var(--bg);color:var(--ink);font:14px system-ui,Segoe UI,Roboto,Arial,sans-serif;}
+    header{display:flex;gap:12px;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid var(--line);background:linear-gradient(180deg,rgba(108,93,211,.16),rgba(0,0,0,0));}
+    header .brand{display:flex;align-items:center;gap:10px;font-weight:700}
+    header .brand .dot{width:12px;height:12px;border-radius:50%;background:var(--t14);box-shadow:0 0 14px var(--t14)}
+    header .actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+
+    .btn{appearance:none;border:1px solid var(--line);background:var(--btn);color:#fff;padding:8px 12px;border-radius:10px;cursor:pointer;display:inline-flex;gap:8px;align-items:center}
+    .btn:hover{filter:brightness(1.08)}
+    .btn.primary{background:var(--t14);border-color:#5b4fc7}
+    .btn.ghost{background:transparent}
+    .btn.ok{background:var(--ok);border-color:#16a34a}
+    .btn.warn{background:var(--warn);border-color:#d97706;color:#0b0f1c}
+    .btn.err{background:var(--err);border-color:#dc2626}
+    .badge{padding:4px 8px;border-radius:999px;background:#1c2440;border:1px solid var(--line);color:var(--muted)}
+    select, input[type="file"]{background:#121a2d;color:#e8ebff;border:1px solid var(--line);border-radius:10px;padding:8px}
+
+    .grid{display:grid;grid-template-columns:minmax(340px,1fr) 1.2fr;gap:12px;height:calc(100vh - 66px);}
+    .panel{border:1px solid var(--line);border-radius:16px;background:linear-gradient(180deg,#0f1629,#0c1223);box-shadow:0 0 0 1px rgba(255,255,255,0.02) inset}
+    .panel .head{display:flex;justify-content:space-between;align-items:center;padding:10px 14px;border-bottom:1px solid var(--line);}
+    .panel .body{padding:0}
+
+    /* Editor */
+    .editor-wrap{display:flex;flex-direction:column;height:100%}
+    #code{width:100%;height:calc(100vh - 140px);resize:none;background:#0b1220;color:#e8ebff;border:0;outline:none;padding:14px;border-bottom-left-radius:16px;border-bottom-right-radius:16px;font:13px/1.5 ui-monospace,SFMono-Regular,Consolas,Monaco,Menlo,monospace}
+    #code:focus{box-shadow:inset 0 0 0 1px #26345b}
+    .toolbar{display:flex;gap:8px;flex-wrap:wrap;padding:10px 14px;border-bottom:1px solid var(--line)}
+    .hint{color:var(--muted);font-size:12px;margin-left:8px}
+
+    /* Sağ taraf */
+    .right{display:grid;grid-template-rows:auto 1fr auto;gap:12px}
+    .stage{display:flex;align-items:center;justify-content:center;padding:10px}
+    canvas{background:#000;width:min(96%,840px);height:auto;max-height:64vh;border:1px solid #2b3560;border-radius:12px;box-shadow:0 6px 30px rgba(0,0,0,.3)}
+
+    .tabs{display:flex;gap:8px;padding:10px 14px;border-bottom:1px solid var(--line)}
+    .tabs button{background:#121a2d;border:1px solid var(--line);color:#e8ebff;border-radius:10px;padding:6px 10px;cursor:pointer}
+    .tabs button.active{background:#1b2646}
+    .tab-body{padding:8px 14px;}
+    #console{white-space:pre-wrap;background:#0b1220;color:#d1d8ff;border:1px dashed #2b3560;border-radius:12px;padding:10px;min-height:80px;max-height:220px;overflow:auto}
+
+    /* Görevler */
+    .tasks{display:grid;gap:8px}
+    .task{border:1px solid var(--line);border-radius:12px;padding:10px;background:#0e1630}
+    .task h4{margin:0 0 6px 0}
+    .task .mini{color:var(--muted);font-size:12px}
+
+    footer{grid-column:1/-1;color:var(--muted);text-align:center;padding:8px}
+  </style>
+</head>
+<body>
+  <header>
+    <div class="brand"><span class="dot"></span> Talent14 • Pygame Canlı Editör</div>
+    <div class="actions">
+      <span class="badge">Ctrl/⌘+Enter → Çalıştır</span>
+      <button id="runBtn" class="btn primary">▶ Çalıştır</button>
+      <button id="stopBtn" class="btn warn">■ Durdur</button>
+      <button id="resetBtn" class="btn ghost">↻ Canvas Sıfırla</button>
+      <select id="tpl" title="Şablonlar">
+        <option value="">Şablon ekle…</option>
+        <option value="minimal">Minimal Döngü</option>
+        <option value="hareket">Klavye Hareket</option>
+        <option value="ates">Mermi (space)</option>
+      </select>
+      <button id="saveBtn" class="btn">💾 Kaydet</button>
+      <button id="loadBtn" class="btn">⤓ Yükle</button>
+      <button id="exportBtn" class="btn">⬇ .py İndir</button>
+      <label class="btn ghost" for="importFile">⬆ .py Yükle</label>
+      <input id="importFile" type="file" accept=".py" style="display:none" />
+    </div>
+  </header>
+
+  <main class="grid">
+    <!-- SOL: Editor -->
+    <section class="panel editor-wrap">
+      <div class="toolbar">
+        <strong>Kod Editörü</strong>
+        <span class="hint">Öğrenciler kodu değiştirip Run ile hemen görebilir.</span>
+      </div>
+      <textarea id="code" spellcheck="false"></textarea>
+    </section>
+
+    <!-- SAĞ: Canvas + Konsol + Görevler -->
+    <section class="right">
+      <div class="panel">
+        <div class="head"><strong>Oyun Sahnesi</strong><span class="hint">Canvas id: <code>game</code></span></div>
+        <div class="body stage">
+          <canvas id="game" width="800" height="480"></canvas>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="tabs">
+          <button class="active" data-tab="console">Konsol</button>
+          <button data-tab="tasks">Görevler</button>
+        </div>
+        <div class="tab-body">
+          <div id="console" role="log"></div>
+          <div id="tasks" class="tasks" style="display:none">
+            <div class="task">
+              <h4>1) Kırmızı daire</h4>
+              <div class="mini">Ekranın ortasına yarıçapı 40 px kırmızı daire çizin.</div>
+            </div>
+            <div class="task">
+              <h4>2) Klavye ile kare</h4>
+              <div class="mini">Ok tuşlarıyla hareket eden kare yapın; ekran dışına çıkmasın.</div>
+            </div>
+            <div class="task">
+              <h4>3) Mermi mekaniği</h4>
+              <div class="mini">Boşluk tuşu ile mermi üretip sağa doğru uçurun.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <footer>Talent14 • Tarayıcıda Pygame (PyScript + pygame-ce)</footer>
+    </section>
+  </main>
+
+  <script>
+    // ---------- Basit sekme geçişi ----------
+    const tabs = document.querySelectorAll('.tabs button');
+    const consoleBox = document.getElementById('console');
+    const tasksBox = document.getElementById('tasks');
+    tabs.forEach(btn=>btn.addEventListener('click',()=>{
+      tabs.forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active');
+      if(btn.dataset.tab==='console'){ consoleBox.style.display='block'; tasksBox.style.display='none'; }
+      else { consoleBox.style.display='none'; tasksBox.style.display='grid'; }
+    }));
+
+    // ---------- Editor başlangıç içeriği ----------
+    const LS_KEY = 't14_pygame_code_v1';
+    const defaultCode = `import pygame, asyncio\n\nasync def main():\n    pygame.init()\n    screen = pygame.display.set_mode((800, 480))\n    clock = pygame.time.Clock()\n    running = True\n    x, y, r = 400, 240, 40\n\n    while running:\n        for e in pygame.event.get():\n            if e.type == pygame.QUIT:\n                running = False\n        screen.fill((15, 16, 28))\n        pygame.draw.circle(screen, (220,80,80), (x,y), r)\n        pygame.display.flip()\n        clock.tick(60)\n        await asyncio.sleep(0)\n\nasyncio.create_task(main())\n`;
+    const codeEl = document.getElementById('code');
+    codeEl.value = localStorage.getItem(LS_KEY) || defaultCode;
+
+    // ---------- Konsol yakalama ----------
+    const origLog = console.log, origErr = console.error, origWarn = console.warn;
+    function pushLog(msg, cls){
+      const line = document.createElement('div');
+      line.textContent = msg;
+      line.style.padding = '2px 0';
+      if(cls==='err') line.style.color = '#ff9aa2';
+      if(cls==='warn') line.style.color = '#ffd57a';
+      consoleBox.appendChild(line);
+      consoleBox.scrollTop = consoleBox.scrollHeight;
+    }
+    console.log = (...a)=>{ origLog(...a); pushLog(a.join(' ')); };
+    console.error = (...a)=>{ origErr(...a); pushLog(a.join(' '), 'err'); };
+    console.warn = (...a)=>{ origWarn(...a); pushLog(a.join(' '), 'warn'); };
+    window.addEventListener('error', e=> pushLog('JS Error: '+e.message, 'err'));
+
+    // ---------- PyScript py-game enjektörü ----------
+    let lastScript = null;
+    function clearPyGame(){
+      if(lastScript){ lastScript.remove(); lastScript=null; }
+      document.querySelectorAll('script[type="py-game"]').forEach(s=>s.remove());
+      // Canvas'ı temizle
+      const canvas = document.getElementById('game');
+      const ctx = canvas.getContext('2d');
+      ctx.fillStyle = '#000';
+      ctx.fillRect(0,0,canvas.width,canvas.height);
+    }
+    function runCode(src){
+      clearPyGame();
+      consoleBox.textContent = '';
+      const blob = new Blob([src], {type:'text/plain'});
+      const url = URL.createObjectURL(blob);
+      const s = document.createElement('script');
+      s.setAttribute('type','py-game');
+      s.setAttribute('target','game'); // <canvas id="game">
+      s.setAttribute('src', url);
+      document.body.appendChild(s);
+      lastScript = s;
+    }
+
+    // ---------- UI bağları ----------
+    document.getElementById('runBtn').addEventListener('click', ()=>{
+      localStorage.setItem(LS_KEY, codeEl.value);
+      runCode(codeEl.value);
+    });
+    document.getElementById('stopBtn').addEventListener('click', clearPyGame);
+    document.getElementById('resetBtn').addEventListener('click', ()=>{
+      const c = document.getElementById('game');
+      const ctx = c.getContext('2d');
+      ctx.fillStyle = '#000'; ctx.fillRect(0,0,c.width,c.height);
+    });
+    document.addEventListener('keydown', e=>{
+      if((e.ctrlKey||e.metaKey) && e.key==='Enter'){
+        e.preventDefault();
+        document.getElementById('runBtn').click();
+      }
+    });
+
+    // Kaydet/Yükle
+    document.getElementById('saveBtn').addEventListener('click', ()=>{
+      localStorage.setItem(LS_KEY, codeEl.value);
+      pushLog('Kod yerel olarak kaydedildi.');
+    });
+    document.getElementById('loadBtn').addEventListener('click', ()=>{
+      const val = localStorage.getItem(LS_KEY);
+      if(val){ codeEl.value = val; pushLog('Yerelden yüklendi.'); }
+      else pushLog('Kayıt bulunamadı.', 'warn');
+    });
+
+    // Dışa aktar (.py indir)
+    document.getElementById('exportBtn').addEventListener('click', ()=>{
+      const a = document.createElement('a');
+      a.download = 'game.py';
+      a.href = URL.createObjectURL(new Blob([codeEl.value], {type:'text/x-python'}));
+      a.click();
+    });
+
+    // İçe aktar (.py yükle)
+    document.getElementById('importFile').addEventListener('change', async (ev)=>{
+      const f = ev.target.files?.[0]; if(!f) return;
+      const txt = await f.text();
+      codeEl.value = txt; pushLog('Dosya yüklendi. Çalıştırmak için ▶ tıklayın.');
+    });
+
+    // Şablonlar
+    const templates = {
+      minimal: `import pygame, asyncio\n\nasync def main():\n    pygame.init()\n    screen = pygame.display.set_mode((800, 480))\n    clock = pygame.time.Clock()\n    running = True\n    while running:\n        for e in pygame.event.get():\n            if e.type == pygame.QUIT:\n                running = False\n        screen.fill((12,14,24))\n        pygame.draw.circle(screen, (230,80,80), (400,240), 40)\n        pygame.display.flip()\n        clock.tick(60)\n        await asyncio.sleep(0)\n\nasyncio.create_task(main())\n` ,
+      hareket: `import pygame, asyncio\n\nasync def main():\n    pygame.init()\n    screen = pygame.display.set_mode((800, 480))\n    clock = pygame.time.Clock()\n    running = True\n    x,y = 380,220\n    speed = 4\n    while running:\n        for e in pygame.event.get():\n            if e.type == pygame.QUIT: running=False\n        keys = pygame.key.get_pressed()\n        x += (keys[pygame.K_RIGHT]-keys[pygame.K_LEFT]) * speed\n        y += (keys[pygame.K_DOWN]-keys[pygame.K_UP]) * speed\n        x = max(0, min(780, x)); y = max(0, min(460, y))\n        screen.fill((10,12,22))\n        pygame.draw.rect(screen, (120,200,255), (x,y,20,20))\n        pygame.display.flip()\n        clock.tick(60); await asyncio.sleep(0)\n\nasyncio.create_task(main())\n` ,
+      ates: `import pygame, asyncio\n\nasync def main():\n    pygame.init()\n    screen = pygame.display.set_mode((800, 480))\n    clock = pygame.time.Clock()\n    running = True\n    x,y = 60,220\n    bullets = []\n    while running:\n        for e in pygame.event.get():\n            if e.type == pygame.QUIT: running=False\n            if e.type == pygame.KEYDOWN and e.key == pygame.K_SPACE:\n                bullets.append([x+20, y+10])\n        keys = pygame.key.get_pressed()\n        y += (keys[pygame.K_DOWN]-keys[pygame.K_UP]) * 4\n        y = max(0, min(460, y))\n        for b in bullets: b[0]+=8\n        bullets = [b for b in bullets if b[0] < 820]\n        screen.fill((8,10,20))\n        pygame.draw.rect(screen, (250,220,120), (x,y,20,20))\n        for b in bullets: pygame.draw.rect(screen, (255,80,80), (*b, 10,4))\n        pygame.display.flip()\n        clock.tick(60); await asyncio.sleep(0)\n\nasyncio.create_task(main())\n`
+    };
+    document.getElementById('tpl').addEventListener('change', (e)=>{
+      const k = e.target.value; if(!k) return;
+      const src = templates[k]; if(!src) return;
+      // Şablonu mevcut kodun sonuna ekleyelim
+      codeEl.value = src;
+      e.target.value = '';
+      pushLog('Şablon yüklendi. Çalıştırmak için ▶ tıklayın.');
+    });
+
+  </script>
+</body>
+</html>
